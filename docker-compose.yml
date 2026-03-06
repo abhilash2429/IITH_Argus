@@ -1,0 +1,94 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: intellicredit
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    volumes:
+      - qdrantdata:/qdrant/storage
+    healthcheck:
+      test: [ "CMD-SHELL", "grep -q ':18BD' /proc/net/tcp /proc/net/tcp6 || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    ports:
+      - "8001:8000"
+    env_file: ./.env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:password@postgres:5432/intellicredit
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - QDRANT_URL=http://qdrant:6333
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app/backend
+      - ./uploads:/app/uploads
+      - ./data:/app/data
+      - ./ml:/app/ml
+      - ./outputs:/app/outputs
+
+  worker:
+    build: ./backend
+    env_file: ./.env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:password@postgres:5432/intellicredit
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - QDRANT_URL=http://qdrant:6333
+    command: celery -A backend.tasks.celery_app.celery_app worker --loglevel=info
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app/backend
+      - ./uploads:/app/uploads
+      - ./data:/app/data
+      - ./ml:/app/ml
+      - ./outputs:/app/outputs
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8001
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
+  qdrantdata:
