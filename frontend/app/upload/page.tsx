@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import UploadZone from '@/components/UploadZone';
+import { useAnalysisStore } from '@/store/analysisStore';
 import {
   createCompanyV1,
   getIntegrationHealthV1,
@@ -18,24 +19,33 @@ const UPLOAD_STAGES = [
   'Tax and bank checks',
 ];
 
+const SUPPORTED_FORMATS = [
+  { type: 'PDF', desc: 'Annual reports, audit reports' },
+  { type: 'CSV / XLS', desc: 'Bank statements, financial data' },
+  { type: 'XML / JSON', desc: 'GST filings, ITR returns' },
+  { type: 'DOCX', desc: 'Word-format financials' },
+  { type: 'JPEG / PNG', desc: 'Scanned documents' },
+];
+
 export default function UploadPage() {
   const router = useRouter();
+  const { companyName: storedName, setCompany, setUploadedFileNames } = useAnalysisStore();
+
   const [files, setFiles] = useState<File[]>([]);
-  const [companyName, setCompanyName] = useState('Vardhman Agri Processing Pvt. Ltd.');
+  const [companyName, setCompanyName] = useState('');
   const [sector, setSector] = useState('agri_processing');
   const [loanAmount, setLoanAmount] = useState(50);
   const [loanPurpose, setLoanPurpose] = useState('working_capital');
   const [loading, setLoading] = useState(false);
   const [activeStage, setActiveStage] = useState<number>(-1);
   const [error, setError] = useState('');
-  const [optionalOpen, setOptionalOpen] = useState(true);
+  const [optionalOpen, setOptionalOpen] = useState(false);
   const [integrationHealth, setIntegrationHealth] = useState<any | null>(null);
   const [integrationLoading, setIntegrationLoading] = useState(false);
   const [integrationError, setIntegrationError] = useState('');
   const [duePreview, setDuePreview] = useState<any | null>(null);
   const [duePreviewLoading, setDuePreviewLoading] = useState(false);
 
-  // Optional finance officer inputs (borrower-side context)
   const [financeOfficerName, setFinanceOfficerName] = useState('');
   const [financeOfficerRole, setFinanceOfficerRole] = useState('Finance Officer');
   const [financeOfficerEmail, setFinanceOfficerEmail] = useState('');
@@ -50,8 +60,8 @@ export default function UploadPage() {
   const [plannedCapex, setPlannedCapex] = useState('');
 
   useEffect(() => {
-    setCompanyName(localStorage.getItem('companyName') || 'Vardhman Agri Processing Pvt. Ltd.');
-  }, []);
+    setCompanyName(storedName || 'Vardhman Agri Processing Pvt. Ltd.');
+  }, [storedName]);
 
   const checkIntegrations = async (liveChecks: boolean) => {
     setIntegrationLoading(true);
@@ -101,52 +111,30 @@ export default function UploadPage() {
 
   useEffect(() => {
     let cancelled = false;
-
     if (!hasOptionalInputs) {
       setDuePreview(null);
       return;
     }
-
     const timer = setTimeout(async () => {
       setDuePreviewLoading(true);
       try {
-        const response = await previewDueDiligenceV1(
-          companyName || 'Borrower',
-          buildDueDiligenceNotes()
-        );
-        if (!cancelled) {
-          setDuePreview(response.data);
-        }
+        const response = await previewDueDiligenceV1(companyName || 'Borrower', buildDueDiligenceNotes());
+        if (!cancelled) setDuePreview(response.data);
       } catch {
-        if (!cancelled) {
-          setDuePreview(null);
-        }
+        if (!cancelled) setDuePreview(null);
       } finally {
-        if (!cancelled) {
-          setDuePreviewLoading(false);
-        }
+        if (!cancelled) setDuePreviewLoading(false);
       }
     }, 450);
-
     return () => {
       cancelled = true;
       clearTimeout(timer);
     };
   }, [
-    hasOptionalInputs,
-    companyName,
-    financeOfficerName,
-    financeOfficerRole,
-    financeOfficerEmail,
-    financeOfficerPhone,
-    capacityPct,
-    inventoryLevel,
-    managementCooperation,
-    businessHighlights,
-    keyRisksDisclosed,
-    majorCustomers,
-    contingentLiabilities,
-    plannedCapex,
+    hasOptionalInputs, companyName, financeOfficerName, financeOfficerRole,
+    financeOfficerEmail, financeOfficerPhone, capacityPct, inventoryLevel,
+    managementCooperation, businessHighlights, keyRisksDisclosed,
+    majorCustomers, contingentLiabilities, plannedCapex,
   ]);
 
   const startAnalysis = async () => {
@@ -165,10 +153,9 @@ export default function UploadPage() {
         loan_purpose: loanPurpose,
       });
       const companyId = companyRes.data.company_id;
-      localStorage.setItem('companyId', companyId);
-      localStorage.setItem('companyName', companyName);
+      setCompany(companyId, companyName);
+      setUploadedFileNames(files.map((f) => f.name));
 
-      // Optional borrower-side qualitative context for CAM
       if (hasOptionalInputs) {
         failedStep = 'submitting borrower context';
         await submitDueDiligenceV1(companyId, {
@@ -177,13 +164,7 @@ export default function UploadPage() {
           management_cooperation: managementCooperation,
           free_text_notes: buildDueDiligenceNotes(),
           key_management_persons: financeOfficerName.trim()
-            ? [
-                {
-                  name: financeOfficerName.trim(),
-                  role: financeOfficerRole.trim() || 'Finance Officer',
-                  notes: 'Borrower representative input captured at application time.',
-                },
-              ]
+            ? [{ name: financeOfficerName.trim(), role: financeOfficerRole.trim() || 'Finance Officer', notes: 'Borrower representative input captured at application time.' }]
             : [],
           borrower_finance_officer_name: financeOfficerName || undefined,
           borrower_finance_officer_role: financeOfficerRole || undefined,
@@ -211,9 +192,7 @@ export default function UploadPage() {
     } catch (err: any) {
       const rawMessage = String(err?.response?.data?.detail || err?.message || 'Upload failed');
       if (rawMessage.toLowerCase().includes('network error')) {
-        setError(
-          `Network error while ${failedStep}. Backend API is not reachable on localhost:8001/8000. Start backend and retry.`
-        );
+        setError(`Network error while ${failedStep}. Backend API is not reachable. Start backend and retry.`);
       } else {
         setError(rawMessage);
       }
@@ -222,334 +201,254 @@ export default function UploadPage() {
     }
   };
 
-  return (
-    <main className="min-h-screen bg-gradient-to-br from-cyan-900 via-blue-900 to-indigo-900 p-6 md:p-10">
-      <div className="max-w-5xl mx-auto space-y-6">
-        <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6 md:p-8">
-          <h1 className="text-4xl font-bold text-white">Loan Application Upload</h1>
-          <p className="text-cyan-50 mt-2 text-lg">
-            Add company details, upload documents, and start CAM preparation.
-          </p>
-          <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-cyan-200/40 bg-cyan-400/20 px-4 py-1 text-cyan-100 text-sm">
-            <span className="h-2 w-2 rounded-full bg-cyan-300" />
-            UX refresh active: finance officer input is included in CAM context
-          </div>
-        </div>
+  const labelClass = 'text-[11px] font-medium tracking-[0.12em] uppercase text-ic-muted';
+  const inputClass = 'mt-1 w-full rounded-[10px] bg-ic-surface border border-ic-border px-4 py-2 text-ic-text focus:outline-none focus:ring-2 focus:ring-ic-accent/40';
 
-        <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6 space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-white text-xl font-semibold">Tool connectivity</p>
-              <p className="text-cyan-100/90 text-sm">
-                Databricks, Qwen OCR, Gemini/LLM, and Firecrawl readiness for this run.
-              </p>
+  return (
+    <div className="bg-ic-page py-10 px-4 md:px-8">
+      <div className="max-w-[1100px] mx-auto flex flex-col lg:flex-row gap-5">
+        {/* Left column — 60% */}
+        <div className="flex-[3] space-y-5">
+          {/* Page heading */}
+          <div>
+            <h1 className="font-display text-[26px] font-normal text-ic-text">Upload Documents</h1>
+            <p className="text-[14px] text-ic-muted mt-1">
+              Add company details, upload documents, and start CAM preparation.
+            </p>
+          </div>
+
+          {/* Basic details card */}
+          <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
+            <p className={`${labelClass} mb-2.5`}>Application Details</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <label className={`md:col-span-2 ${labelClass}`}>
+                Company name
+                <input value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="e.g. Vizag Steel Works Pvt Ltd" className={inputClass} />
+              </label>
+              <label className={labelClass}>
+                Loan amount (INR Cr)
+                <input type="number" value={loanAmount} onChange={(e) => setLoanAmount(Number(e.target.value))} className={inputClass} />
+              </label>
+              <label className={`md:col-span-2 ${labelClass}`}>
+                Sector
+                <select value={sector} onChange={(e) => setSector(e.target.value)} className={inputClass}>
+                  {['agri_processing', 'manufacturing', 'nbfc', 'real_estate', 'textiles', 'it_services'].map((s) => (
+                    <option key={s} value={s}>{s.replace('_', ' ').toUpperCase()}</option>
+                  ))}
+                </select>
+              </label>
+              <label className={labelClass}>
+                Purpose
+                <select value={loanPurpose} onChange={(e) => setLoanPurpose(e.target.value)} className={inputClass}>
+                  <option value="working_capital">Working Capital</option>
+                  <option value="term_loan">Term Loan</option>
+                  <option value="capex">Capex</option>
+                  <option value="refinance">Refinance</option>
+                </select>
+              </label>
             </div>
+          </div>
+
+          {/* Upload dropzone */}
+          <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
+            <p className={`${labelClass} mb-2.5`}>Documents</p>
+            <UploadZone onFilesReady={setFiles} />
+          </div>
+
+          {/* Optional borrower input */}
+          <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5 space-y-4">
             <button
               type="button"
-              onClick={() => checkIntegrations(true)}
-              className="px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold disabled:bg-slate-600"
-              disabled={integrationLoading}
+              onClick={() => setOptionalOpen((prev) => !prev)}
+              className="w-full flex items-center justify-between text-left bg-transparent border-none cursor-pointer"
             >
-              {integrationLoading ? 'Checking...' : 'Run live check'}
+              <span className="text-[14px] font-medium text-ic-text">Optional borrower input (Finance Officer)</span>
+              <span className="text-[12px] text-ic-muted">{optionalOpen ? 'Hide' : 'Add details'}</span>
             </button>
-          </div>
-          {integrationError && (
-            <p className="text-red-200 text-sm bg-red-950/40 border border-red-400/40 rounded-lg p-3">
-              {integrationError}
+            {optionalOpen && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label className={labelClass}>
+                  Finance officer name
+                  <input value={financeOfficerName} onChange={(e) => setFinanceOfficerName(e.target.value)} className={inputClass} />
+                </label>
+                <label className={labelClass}>
+                  Role
+                  <input value={financeOfficerRole} onChange={(e) => setFinanceOfficerRole(e.target.value)} className={inputClass} />
+                </label>
+                <label className={labelClass}>
+                  Email
+                  <input type="email" value={financeOfficerEmail} onChange={(e) => setFinanceOfficerEmail(e.target.value)} className={inputClass} />
+                </label>
+                <label className={labelClass}>
+                  Phone
+                  <input value={financeOfficerPhone} onChange={(e) => setFinanceOfficerPhone(e.target.value)} className={inputClass} />
+                </label>
+                <label className={labelClass}>
+                  Capacity utilization ({capacityPct}%)
+                  <input type="range" min={0} max={100} value={capacityPct} onChange={(e) => setCapacityPct(Number(e.target.value))} className="mt-2 w-full" />
+                </label>
+                <label className={labelClass}>
+                  Inventory situation
+                  <select value={inventoryLevel} onChange={(e) => setInventoryLevel(e.target.value)} className={inputClass}>
+                    <option value="ADEQUATE">Adequate</option>
+                    <option value="LOW">Low</option>
+                    <option value="EXCESS">Excess</option>
+                    <option value="SUSPICIOUS">Needs review</option>
+                  </select>
+                </label>
+                <label className={labelClass}>
+                  Management cooperation
+                  <select value={managementCooperation} onChange={(e) => setManagementCooperation(e.target.value)} className={inputClass}>
+                    <option value="COOPERATIVE">Cooperative</option>
+                    <option value="EVASIVE">Evasive</option>
+                    <option value="REFUSED">Refused key clarifications</option>
+                  </select>
+                </label>
+                <label className={labelClass}>
+                  Major customers
+                  <input value={majorCustomers} onChange={(e) => setMajorCustomers(e.target.value)} placeholder="Top buyers and concentration" className={inputClass} />
+                </label>
+                <label className={`md:col-span-2 ${labelClass}`}>
+                  Business highlights
+                  <textarea value={businessHighlights} onChange={(e) => setBusinessHighlights(e.target.value)} rows={3} placeholder="Orders, seasonal trends, utilization" className={`${inputClass} min-h-[100px]`} />
+                </label>
+                <label className={`md:col-span-2 ${labelClass}`}>
+                  Risks disclosed by borrower
+                  <textarea value={keyRisksDisclosed} onChange={(e) => setKeyRisksDisclosed(e.target.value)} rows={2} placeholder="Any expected disruptions" className={`${inputClass} min-h-[80px]`} />
+                </label>
+                <label className={labelClass}>
+                  Contingent liabilities
+                  <input value={contingentLiabilities} onChange={(e) => setContingentLiabilities(e.target.value)} className={inputClass} />
+                </label>
+                <label className={labelClass}>
+                  Planned capex
+                  <input value={plannedCapex} onChange={(e) => setPlannedCapex(e.target.value)} className={inputClass} />
+                </label>
+              </div>
+            )}
+            <p className="text-[12px] text-ic-muted">
+              These fields are optional. If provided, they are used as borrower clarifications in risk scoring and CAM.
             </p>
+            {hasOptionalInputs && (
+              <div className="bg-ic-accent-light border border-ic-border rounded-[10px] p-4">
+                <p className="text-[13px] font-medium text-ic-accent">Estimated borrower-input score adjustment</p>
+                <p className="text-[12px] text-ic-muted mt-1">
+                  {duePreviewLoading
+                    ? 'Calculating expected impact...'
+                    : `${Number(duePreview?.score_adjustment || 0) >= 0 ? '+' : ''}${Number(duePreview?.score_adjustment || 0).toFixed(1)} raw adjustment`}
+                </p>
+                {!!duePreview?.risk_factors?.length && (
+                  <p className="text-[11px] text-ic-negative mt-2">Risk cues: {duePreview.risk_factors.slice(0, 4).join(', ')}</p>
+                )}
+                {!!duePreview?.positive_factors?.length && (
+                  <p className="text-[11px] text-ic-positive mt-1">Positive cues: {duePreview.positive_factors.slice(0, 4).join(', ')}</p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Upload progress */}
+          <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
+            <p className={`${labelClass} mb-2.5`}>Upload Progress</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {UPLOAD_STAGES.map((stage, idx) => {
+                const completed = idx < activeStage;
+                const active = idx === activeStage && loading;
+                return (
+                  <div
+                    key={stage}
+                    className={`rounded-[10px] px-3 py-2 text-[13px] border ${
+                      completed
+                        ? 'bg-ic-accent-light border-ic-accent/30 text-ic-positive'
+                        : active
+                          ? 'bg-ic-accent-light border-ic-accent/50 text-ic-accent animate-pulse'
+                          : 'bg-ic-surface-mid border-ic-border text-ic-muted'
+                    }`}
+                  >
+                    {completed ? '✓ ' : active ? '◌ ' : '○ '} {stage}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {error && (
+            <div className="bg-[#fdf0e8] border border-[#f3d5bc] rounded-[10px] p-4">
+              <p className="text-ic-warning text-[13px]">{error}</p>
+            </div>
           )}
-          {integrationHealth?.integrations && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {Object.entries(integrationHealth.integrations).map(([tool, info]: [string, any]) => (
-                <div key={tool} className="rounded-lg border border-cyan-300/30 bg-slate-900/50 p-3">
-                  <p className="text-cyan-100 font-semibold capitalize">{tool.replace('_', ' ')}</p>
-                  <p className="text-sm text-cyan-50/90">
-                    Configured: {info.configured ? 'Yes' : 'No'} | Status: {info.ok ? 'OK' : 'Issue'}
-                  </p>
-                  {(info.provider || info.model || info.method || info.ping !== undefined) && (
-                    <p className="text-xs text-cyan-100/80 mt-1">
-                      {info.provider ? `Provider: ${info.provider}. ` : ''}
-                      {info.model ? `Model: ${info.model}. ` : ''}
-                      {info.method ? `Method: ${info.method}. ` : ''}
-                      {info.ping !== undefined ? `Ping: ${String(info.ping)}.` : ''}
-                    </p>
-                  )}
-                  {info.hint && (
-                    <p className="text-xs text-amber-100 mt-1 break-words">Hint: {String(info.hint)}</p>
-                  )}
-                  {info.error && (
-                    <p className="text-xs text-red-200 mt-1 break-words">Error: {String(info.error)}</p>
-                  )}
+
+          <button
+            onClick={startAnalysis}
+            disabled={loading || files.length === 0}
+            className="w-full py-3 rounded-[10px] bg-ic-accent text-white font-medium text-base transition-opacity hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {loading ? 'Starting your CAM analysis...' : `Start analysis (${files.length} files)`}
+          </button>
+        </div>
+
+        {/* Right column — 40% */}
+        <div className="flex-[2] space-y-5">
+          {/* What to upload guide */}
+          <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
+            <p className={`${labelClass} mb-2.5`}>What to Upload</p>
+            <div className="space-y-2">
+              {['Annual Report / Balance Sheet', 'Bank Statements (12 months)', 'GST Returns (GSTR-3B)', 'IT Returns (ITR)', 'Audit Report'].map((item) => (
+                <div key={item} className="flex items-center gap-2 py-1">
+                  <span className="w-4 h-4 rounded-full border-2 border-ic-border flex-shrink-0" />
+                  <span className="text-[13px] text-ic-text">{item}</span>
                 </div>
               ))}
             </div>
-          )}
-        </div>
-
-        <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6 space-y-4">
-          <p className="text-white text-xl font-semibold">Basic application details</p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <label className="md:col-span-2 text-cyan-50 text-sm">
-              Company name
-              <input
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
-                placeholder="Example: Vizag Steel Works Pvt Ltd"
-                className="mt-1 w-full rounded-lg bg-slate-900/70 border border-cyan-300/40 px-4 py-2 text-white"
-              />
-            </label>
-
-            <label className="text-cyan-50 text-sm">
-              Requested loan amount (INR crore)
-              <input
-                type="number"
-                value={loanAmount}
-                onChange={(e) => setLoanAmount(Number(e.target.value))}
-                className="mt-1 w-full rounded-lg bg-slate-900/70 border border-cyan-300/40 px-4 py-2 text-white"
-                placeholder="Example: 50"
-              />
-              <span className="mt-1 block text-cyan-100/80 text-xs">
-                This is the requested facility amount, not a risk score.
-              </span>
-            </label>
-
-            <label className="text-cyan-50 text-sm md:col-span-2">
-              Sector
-              <select
-                value={sector}
-                onChange={(e) => setSector(e.target.value)}
-                className="mt-1 w-full rounded-lg bg-slate-900/70 border border-cyan-300/40 px-4 py-2 text-white"
-              >
-                {['agri_processing', 'manufacturing', 'nbfc', 'real_estate', 'textiles', 'it_services'].map((s) => (
-                  <option key={s} value={s}>
-                    {s.replace('_', ' ').toUpperCase()}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="text-cyan-50 text-sm">
-              Loan purpose
-              <select
-                value={loanPurpose}
-                onChange={(e) => setLoanPurpose(e.target.value)}
-                className="mt-1 w-full rounded-lg bg-slate-900/70 border border-cyan-300/40 px-4 py-2 text-white"
-              >
-                <option value="working_capital">Working Capital</option>
-                <option value="term_loan">Term Loan</option>
-                <option value="capex">Capex</option>
-                <option value="refinance">Refinance</option>
-              </select>
-            </label>
           </div>
-        </div>
 
-        <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6">
-          <UploadZone onFilesReady={setFiles} />
-        </div>
-
-        <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6 space-y-4">
-          <button
-            type="button"
-            onClick={() => setOptionalOpen((prev) => !prev)}
-            className="w-full flex items-center justify-between text-left text-white font-semibold text-lg"
-          >
-            <span>Optional borrower input (Finance Officer)</span>
-            <span>{optionalOpen ? 'Hide' : 'Add details'}</span>
-          </button>
-          {optionalOpen && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <label className="text-cyan-50 text-sm">
-                Finance officer name
-                <input
-                  value={financeOfficerName}
-                  onChange={(e) => setFinanceOfficerName(e.target.value)}
-                  className="mt-1 w-full rounded-lg bg-slate-900/70 border border-cyan-300/40 px-4 py-2 text-white"
-                />
-              </label>
-              <label className="text-cyan-50 text-sm">
-                Role
-                <input
-                  value={financeOfficerRole}
-                  onChange={(e) => setFinanceOfficerRole(e.target.value)}
-                  className="mt-1 w-full rounded-lg bg-slate-900/70 border border-cyan-300/40 px-4 py-2 text-white"
-                />
-              </label>
-              <label className="text-cyan-50 text-sm">
-                Email
-                <input
-                  type="email"
-                  value={financeOfficerEmail}
-                  onChange={(e) => setFinanceOfficerEmail(e.target.value)}
-                  className="mt-1 w-full rounded-lg bg-slate-900/70 border border-cyan-300/40 px-4 py-2 text-white"
-                />
-              </label>
-              <label className="text-cyan-50 text-sm">
-                Phone
-                <input
-                  value={financeOfficerPhone}
-                  onChange={(e) => setFinanceOfficerPhone(e.target.value)}
-                  className="mt-1 w-full rounded-lg bg-slate-900/70 border border-cyan-300/40 px-4 py-2 text-white"
-                />
-              </label>
-              <label className="text-cyan-50 text-sm">
-                Capacity utilization ({capacityPct}%)
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  value={capacityPct}
-                  onChange={(e) => setCapacityPct(Number(e.target.value))}
-                  className="mt-2 w-full accent-cyan-400"
-                />
-              </label>
-              <label className="text-cyan-50 text-sm">
-                Inventory situation
-                <select
-                  value={inventoryLevel}
-                  onChange={(e) => setInventoryLevel(e.target.value)}
-                  className="mt-1 w-full rounded-lg bg-slate-900/70 border border-cyan-300/40 px-4 py-2 text-white"
-                >
-                  <option value="ADEQUATE">Adequate</option>
-                  <option value="LOW">Low</option>
-                  <option value="EXCESS">Excess</option>
-                  <option value="SUSPICIOUS">Needs review</option>
-                </select>
-              </label>
-              <label className="text-cyan-50 text-sm">
-                Management cooperation
-                <select
-                  value={managementCooperation}
-                  onChange={(e) => setManagementCooperation(e.target.value)}
-                  className="mt-1 w-full rounded-lg bg-slate-900/70 border border-cyan-300/40 px-4 py-2 text-white"
-                >
-                  <option value="COOPERATIVE">Cooperative</option>
-                  <option value="EVASIVE">Evasive</option>
-                  <option value="REFUSED">Refused key clarifications</option>
-                </select>
-              </label>
-              <label className="text-cyan-50 text-sm">
-                Major customers (optional)
-                <input
-                  value={majorCustomers}
-                  onChange={(e) => setMajorCustomers(e.target.value)}
-                  placeholder="Top buyers and concentration"
-                  className="mt-1 w-full rounded-lg bg-slate-900/70 border border-cyan-300/40 px-4 py-2 text-white"
-                />
-              </label>
-              <label className="text-cyan-50 text-sm md:col-span-2">
-                Business highlights
-                <textarea
-                  value={businessHighlights}
-                  onChange={(e) => setBusinessHighlights(e.target.value)}
-                  rows={3}
-                  placeholder="Orders, seasonal trends, plant utilization, operational updates"
-                  className="mt-1 w-full rounded-lg bg-slate-900/70 border border-cyan-300/40 px-4 py-2 text-white"
-                />
-              </label>
-              <label className="text-cyan-50 text-sm md:col-span-2">
-                Risks disclosed by borrower
-                <textarea
-                  value={keyRisksDisclosed}
-                  onChange={(e) => setKeyRisksDisclosed(e.target.value)}
-                  rows={2}
-                  placeholder="Any expected disruptions, legal matters, receivable delays"
-                  className="mt-1 w-full rounded-lg bg-slate-900/70 border border-cyan-300/40 px-4 py-2 text-white"
-                />
-              </label>
-              <label className="text-cyan-50 text-sm">
-                Contingent liabilities
-                <input
-                  value={contingentLiabilities}
-                  onChange={(e) => setContingentLiabilities(e.target.value)}
-                  placeholder="Guarantees, LC obligations, pending claims"
-                  className="mt-1 w-full rounded-lg bg-slate-900/70 border border-cyan-300/40 px-4 py-2 text-white"
-                />
-              </label>
-              <label className="text-cyan-50 text-sm">
-                Planned capex or expansion
-                <input
-                  value={plannedCapex}
-                  onChange={(e) => setPlannedCapex(e.target.value)}
-                  placeholder="Next 12-24 month plans"
-                  className="mt-1 w-full rounded-lg bg-slate-900/70 border border-cyan-300/40 px-4 py-2 text-white"
-                />
-              </label>
-            </div>
-          )}
-          <p className="text-cyan-100/80 text-sm">
-            These fields are optional. If provided, they are used as borrower clarifications in risk scoring and CAM.
-          </p>
-          {hasOptionalInputs && (
-            <div className="rounded-xl border border-cyan-300/40 bg-slate-900/45 p-4">
-              <p className="text-cyan-100 font-semibold">Estimated borrower-input score adjustment</p>
-              <p className="text-cyan-50 text-sm mt-1">
-                {duePreviewLoading
-                  ? 'Calculating expected impact...'
-                  : `${Number(duePreview?.score_adjustment || 0) >= 0 ? '+' : ''}${Number(
-                      duePreview?.score_adjustment || 0
-                    ).toFixed(1)} raw adjustment (applied in risk scoring and CAM narrative).`}
-              </p>
-              {!!duePreview?.risk_factors?.length && (
-                <p className="text-red-200 text-xs mt-2">
-                  Risk cues: {duePreview.risk_factors.slice(0, 4).join(', ')}
-                </p>
-              )}
-              {!!duePreview?.positive_factors?.length && (
-                <p className="text-emerald-200 text-xs mt-1">
-                  Positive cues: {duePreview.positive_factors.slice(0, 4).join(', ')}
-                </p>
-              )}
-            </div>
-          )}
-        </div>
-
-        {hasOptionalInputs && (
-          <div className="bg-emerald-900/30 border border-emerald-400/40 rounded-2xl p-5">
-            <p className="text-emerald-100 font-semibold text-lg">Borrower clarifications ready for CAM</p>
-            <p className="text-emerald-50/90 text-sm mt-1">
-              Finance officer details and business notes will be merged into qualitative assessment and recommendation narrative.
-            </p>
-          </div>
-        )}
-
-        <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6">
-          <p className="text-white text-xl font-semibold mb-3">Upload progress</p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {UPLOAD_STAGES.map((stage, idx) => {
-              const completed = idx < activeStage;
-              const active = idx === activeStage && loading;
-              return (
-                <div
-                  key={stage}
-                  className={`rounded-lg px-3 py-2 text-sm border ${
-                    completed
-                      ? 'bg-emerald-900/40 border-emerald-500/50 text-emerald-200'
-                      : active
-                        ? 'bg-cyan-900/50 border-cyan-400/70 text-cyan-100 animate-pulse'
-                        : 'bg-slate-900/40 border-slate-500/40 text-slate-200/70'
-                  }`}
-                >
-                  {completed ? '✓ ' : active ? '⏳ ' : '○ '} {stage}
+          {/* Supported formats */}
+          <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
+            <p className={`${labelClass} mb-2.5`}>Supported Formats</p>
+            <div className="space-y-1.5">
+              {SUPPORTED_FORMATS.map((f) => (
+                <div key={f.type} className="flex justify-between text-[12px]">
+                  <span className="font-mono font-medium text-ic-text">{f.type}</span>
+                  <span className="text-ic-muted">{f.desc}</span>
                 </div>
-              );
-            })}
+              ))}
+            </div>
           </div>
-          <p className="mt-3 text-cyan-100/80 text-xs">
-            Public web checks, risk assessment, and CAM draft progress continue on the Pipeline page.
-          </p>
+
+          {/* Tool connectivity */}
+          <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
+            <div className="flex items-center justify-between gap-3 mb-2.5">
+              <p className={labelClass}>Tool Connectivity</p>
+              <button
+                type="button"
+                onClick={() => checkIntegrations(true)}
+                className="px-3 py-1 rounded-md bg-ic-accent text-white text-[11px] font-medium disabled:opacity-40"
+                disabled={integrationLoading}
+              >
+                {integrationLoading ? 'Checking...' : 'Run live check'}
+              </button>
+            </div>
+            {integrationError && (
+              <div className="bg-[#fdf0e8] border border-[#f3d5bc] rounded-md p-2 mb-2">
+                <p className="text-ic-warning text-[11px]">{integrationError}</p>
+              </div>
+            )}
+            {integrationHealth?.integrations && (
+              <div className="space-y-2">
+                {Object.entries(integrationHealth.integrations).map(([tool, info]: [string, any]) => (
+                  <div key={tool} className="rounded-md border border-ic-border bg-ic-surface-mid p-2.5">
+                    <p className="text-[12px] font-medium text-ic-text capitalize">{tool.replace('_', ' ')}</p>
+                    <p className="text-[11px] text-ic-muted">
+                      {info.configured ? 'Configured' : 'Not configured'} · {info.ok ? 'OK' : 'Issue'}
+                    </p>
+                    {info.error && <p className="text-[11px] text-ic-negative mt-0.5">{String(info.error)}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-
-        {error && <p className="text-red-200 text-sm bg-red-950/40 border border-red-400/40 rounded-lg p-3">{error}</p>}
-
-        <button
-          onClick={startAnalysis}
-          disabled={loading || files.length === 0}
-          className="w-full py-4 rounded-xl bg-cyan-500 hover:bg-cyan-400 disabled:bg-slate-600 text-slate-950 font-bold text-lg shadow-lg shadow-cyan-900/40"
-        >
-          {loading ? 'Starting your CAM analysis...' : `Start analysis (${files.length} files)`}
-        </button>
       </div>
-    </main>
+    </div>
   );
 }

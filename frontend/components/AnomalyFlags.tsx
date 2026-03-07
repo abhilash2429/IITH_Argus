@@ -6,25 +6,33 @@ interface Anomaly {
   severity: string;
 }
 
+const getTagStyle = (severity: string) => {
+  if (severity === 'CRITICAL' || severity === 'HIGH')
+    return 'bg-[#fdf0e8] text-ic-warning border border-[#f3d5bc]';
+  if (severity === 'LOW' || severity === 'POSITIVE')
+    return 'bg-ic-accent-light text-ic-positive border border-[#b8d9bf]';
+  return 'bg-ic-surface-mid text-ic-muted border border-ic-border';
+};
+
 export default function AnomalyFlags({ anomalies }: { anomalies: Anomaly[] }) {
   if (!anomalies.length) {
     return (
-      <div className="bg-slate-800/50 rounded-xl border border-slate-700 p-5">
-        <h3 className="text-white font-semibold text-lg mb-2">Anomaly Flags</h3>
-        <p className="text-slate-400 text-sm">No critical anomalies detected.</p>
+      <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
+        <p className="text-[10px] font-medium tracking-[0.12em] uppercase text-ic-muted mb-2.5">Anomaly Flags</p>
+        <p className="text-ic-muted text-[13px]">No critical anomalies detected.</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-slate-800/50 rounded-xl border border-slate-700 p-5">
-      <h3 className="text-white font-semibold text-lg mb-4">Anomaly Flags</h3>
+    <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
+      <p className="text-[10px] font-medium tracking-[0.12em] uppercase text-ic-muted mb-4">Anomaly Flags</p>
       <div className="space-y-3">
         {anomalies.map((a, idx) => (
-          <div key={`${a.title}-${idx}`} className="p-3 rounded-lg bg-slate-900/60 border border-slate-700">
-            <p className="text-white font-medium">{a.title}</p>
-            <p className="text-slate-400 text-sm mt-1">{a.details}</p>
-            <span className="inline-block mt-2 text-xs px-2 py-1 rounded bg-red-900/50 text-red-300">
+          <div key={`${a.title}-${idx}`} className="py-2.5 border-b border-ic-border last:border-0">
+            <p className="text-[13px] font-medium text-ic-text">{a.title}</p>
+            <p className="text-ic-muted text-[12px] mt-1">{a.details}</p>
+            <span className={`inline-block mt-2 text-[10px] px-2 py-0.5 rounded font-medium ${getTagStyle(a.severity)}`}>
               {a.severity}
             </span>
           </div>
@@ -33,4 +41,3 @@ export default function AnomalyFlags({ anomalies }: { anomalies: Anomaly[] }) {
     </div>
   );
 }
-

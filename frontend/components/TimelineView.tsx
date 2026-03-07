@@ -7,34 +7,36 @@ interface TimelineItem {
   details?: string;
 }
 
-const colorMap: Record<TimelineItem['severity'], string> = {
-  CRITICAL: 'bg-red-500',
-  HIGH: 'bg-orange-500',
-  MEDIUM: 'bg-yellow-500',
-  LOW: 'bg-sky-500',
-  INFORMATIONAL: 'bg-blue-500',
+const severityStyle: Record<TimelineItem['severity'], { dot: string; badge: string }> = {
+  CRITICAL: { dot: 'bg-ic-negative', badge: 'bg-[#fde8e8] text-ic-negative border border-[#f3bcbc]' },
+  HIGH: { dot: 'bg-ic-warning', badge: 'bg-[#fdf0e8] text-ic-warning border border-[#f3d5bc]' },
+  MEDIUM: { dot: 'bg-ic-tan', badge: 'bg-ic-surface-mid text-ic-muted border border-ic-border' },
+  LOW: { dot: 'bg-ic-accent', badge: 'bg-ic-accent-light text-ic-positive border border-[#b8d9bf]' },
+  INFORMATIONAL: { dot: 'bg-ic-muted', badge: 'bg-ic-surface-mid text-ic-muted border border-ic-border' },
 };
 
 export default function TimelineView({ items }: { items: TimelineItem[] }) {
   return (
-    <div className="bg-slate-800/50 rounded-xl border border-slate-700 p-5">
-      <h3 className="text-white font-semibold text-lg mb-4">Risk Flag Timeline</h3>
-      <div className="space-y-3">
-        {items.map((item, idx) => (
-          <div key={`${item.timestamp}-${idx}`} className="flex gap-3 items-start">
-            <div className={`w-3 h-3 rounded-full mt-2 ${colorMap[item.severity]}`} />
-            <div className="flex-1">
-              <p className="text-sm text-slate-300">{new Date(item.timestamp).toLocaleString()}</p>
-              <p className="text-white font-medium">{item.title}</p>
-              {item.details && <p className="text-slate-400 text-sm">{item.details}</p>}
+    <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
+      <p className="text-[10px] font-medium tracking-[0.12em] uppercase text-ic-muted mb-4">Risk Flag Timeline</p>
+      <div className="space-y-0">
+        {items.map((item, idx) => {
+          const styles = severityStyle[item.severity] || severityStyle.INFORMATIONAL;
+          return (
+            <div key={`${item.timestamp}-${idx}`} className="flex gap-3 py-2.5 border-b border-ic-border last:border-0">
+              <div className={`w-2.5 h-2.5 rounded-full mt-1 flex-shrink-0 ${styles.dot}`} />
+              <div className="flex-1 min-w-0">
+                <p className="font-mono text-[11px] text-ic-muted">{new Date(item.timestamp).toLocaleString()}</p>
+                <p className="text-[13px] font-medium text-ic-text mt-0.5">{item.title}</p>
+                {item.details && <p className="text-ic-muted text-[12px] mt-0.5">{item.details}</p>}
+              </div>
+              <span className={`text-[10px] px-2 py-0.5 rounded font-medium h-fit flex-shrink-0 ${styles.badge}`}>
+                {item.severity}
+              </span>
             </div>
-            <span className="text-xs px-2 py-1 rounded bg-slate-700 text-slate-200">
-              {item.severity}
-            </span>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
 }
-

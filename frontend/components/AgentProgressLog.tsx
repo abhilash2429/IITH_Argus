@@ -1,8 +1,3 @@
-/**
- * AgentProgressLog — SSE consumer for pipeline progress.
- * Shows friendly progress lines with timestamps, stage status, HITL banner.
- */
-
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
@@ -55,9 +50,7 @@ export default function AgentProgressLog({
 
   useEffect(() => {
     const url = getStatusStreamV1(companyId);
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-    }
+    if (eventSourceRef.current) eventSourceRef.current.close();
     const eventSource = new EventSource(url);
     eventSourceRef.current = eventSource;
 
@@ -71,17 +64,14 @@ export default function AgentProgressLog({
           const rawStep = String(data.step || '');
           const normalizedMessage = rawMessage.trim().toLowerCase().replace(/\s+/g, ' ');
           const dedupeKey = `${rawStep}|${normalizedMessage}`;
-          if (seenMessageKeysRef.current.has(dedupeKey)) {
-            return;
-          }
+          if (seenMessageKeysRef.current.has(dedupeKey)) return;
           seenMessageKeysRef.current.add(dedupeKey);
 
-          const entry: LogEntry = {
+          setLogs((prev) => [...prev, {
             timestamp: new Date(rawTimestamp || Date.now()).toLocaleTimeString(),
             message: rawMessage,
             step: data.step,
-          };
-          setLogs((prev) => [...prev, entry]);
+          }]);
         }
 
         if (data.type === 'status') {
@@ -101,11 +91,8 @@ export default function AgentProgressLog({
           eventSource.close();
         }
       } catch {
-        // plain text log
         const normalizedMessage = String(event.data || '').trim().toLowerCase().replace(/\s+/g, ' ');
-        if (seenMessageKeysRef.current.has(`plain|${normalizedMessage}`)) {
-          return;
-        }
+        if (seenMessageKeysRef.current.has(`plain|${normalizedMessage}`)) return;
         seenMessageKeysRef.current.add(`plain|${normalizedMessage}`);
         setLogs((prev) => [
           ...prev,
@@ -114,15 +101,11 @@ export default function AgentProgressLog({
       }
     };
 
-    eventSource.onerror = () => {
-      eventSource.close();
-    };
+    eventSource.onerror = () => { eventSource.close(); };
 
     return () => {
       eventSource.close();
-      if (eventSourceRef.current === eventSource) {
-        eventSourceRef.current = null;
-      }
+      if (eventSourceRef.current === eventSource) eventSourceRef.current = null;
     };
   }, [companyId, onHitlReached, onComplete]);
 
@@ -130,15 +113,22 @@ export default function AgentProgressLog({
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
 
+  const getLogColor = (message: string) => {
+    if (message.includes('ERROR')) return 'text-ic-negative';
+    if (message.includes('✅') || message.includes('Complete')) return 'text-ic-positive';
+    if (message.includes('HITL')) return 'text-ic-warning';
+    return 'text-ic-text';
+  };
+
   return (
     <div>
       {/* HITL Banner */}
       {isHitl && !isComplete && (
-        <div className="mb-4 p-4 bg-yellow-900/30 border border-yellow-600 rounded-xl animate-pulse">
-          <p className="text-yellow-300 font-semibold text-lg">
-            ⏸️ Human-in-the-Loop — Awaiting Qualitative Input
+        <div className="mb-4 p-4 bg-[#fdf0e8] border border-[#f3d5bc] rounded-[10px]">
+          <p className="text-ic-warning font-medium text-[14px]">
+            Human-in-the-Loop — Awaiting Qualitative Input
           </p>
-          <p className="text-yellow-200 text-sm mt-1">
+          <p className="text-ic-muted text-[12px] mt-1">
             Enter your site visit notes and management assessment to continue.
           </p>
         </div>
@@ -146,42 +136,36 @@ export default function AgentProgressLog({
 
       {/* Completion Banner */}
       {isComplete && (
-        <div className="mb-4 p-4 bg-green-900/30 border border-green-600 rounded-xl">
-          <p className="text-green-300 font-semibold text-lg">
-            ✅ Pipeline Complete — Credit Appraisal Ready
+        <div className="mb-4 p-4 bg-ic-accent-light border border-[#b8d9bf] rounded-[10px]">
+          <p className="text-ic-positive font-medium text-[14px]">
+            Pipeline Complete — Credit Appraisal Ready
           </p>
         </div>
       )}
 
+      {/* Progress bar */}
       <div className="mb-3">
-        <div className="flex justify-between text-xs text-slate-400 mb-1">
+        <div className="flex justify-between text-[11px] text-ic-muted mb-1">
           <span>{currentStep}</span>
-          <span>{progress.toFixed(0)}%</span>
+          <span className="font-mono">{progress.toFixed(0)}%</span>
         </div>
-        <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
-          <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: `${progress}%` }} />
+        <div className="h-1.5 bg-ic-surface-mid rounded-full overflow-hidden">
+          <div
+            className="h-full bg-ic-accent transition-all duration-500 rounded-full"
+            style={{ width: `${progress}%` }}
+          />
         </div>
       </div>
 
       {/* Log Lines */}
-      <div className="bg-slate-900/90 rounded-xl border border-slate-700 p-4 max-h-96 overflow-y-auto text-sm">
+      <div className="bg-ic-surface-mid rounded-[10px] border border-ic-border p-4 max-h-96 overflow-y-auto font-mono text-[12px]">
         {logs.length === 0 && (
-          <p className="text-slate-500 animate-pulse">Connecting to pipeline...</p>
+          <p className="text-ic-muted animate-pulse">Connecting to pipeline...</p>
         )}
         {logs.map((log, i) => (
           <div key={i} className="flex gap-3 py-0.5">
-            <span className="text-slate-500 shrink-0">{log.timestamp}</span>
-            <span
-              className={
-                log.message.includes('ERROR')
-                  ? 'text-red-400'
-                  : log.message.includes('✅') || log.message.includes('Complete')
-                    ? 'text-green-400'
-                    : log.message.includes('HITL')
-                      ? 'text-yellow-400'
-                      : 'text-slate-300'
-              }
-            >
+            <span className="text-ic-muted shrink-0">{log.timestamp}</span>
+            <span className={getLogColor(log.message)}>
               {log.step ? `[${STEP_LABELS[String(log.step)] || String(log.step)}] ` : ''}
               {log.message}
             </span>

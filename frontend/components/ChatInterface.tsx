@@ -1,9 +1,3 @@
-/**
- * ChatInterface — Full chat UI with RAG.
- * User messages right-aligned blue. AI messages left-aligned grey.
- * Sources badge per response. Suggested starter questions.
- */
-
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
@@ -46,11 +40,7 @@ export default function ChatInterface({ companyId, companyName }: ChatInterfaceP
     if (!UUID_REGEX.test(companyId)) {
       setMessages((prev) => [
         ...prev,
-        {
-          role: 'assistant',
-          content:
-            'This appraisal session is invalid or expired. Please run analysis again from Upload.',
-        },
+        { role: 'assistant', content: 'This appraisal session is invalid or expired. Please run analysis again from Upload.' },
       ]);
       return;
     }
@@ -84,18 +74,18 @@ export default function ChatInterface({ companyId, companyName }: ChatInterfaceP
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-12rem)]">
+    <div className="flex flex-col flex-1">
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto space-y-4 p-4">
+      <div className="flex-1 overflow-y-auto space-y-4 px-6 py-4">
         {messages.length === 0 && (
           <div className="text-center mt-8">
-            <p className="text-slate-400 mb-6">Ask anything about {companyName}&apos;s credit appraisal</p>
+            <p className="text-ic-muted mb-6 text-[14px]">Ask anything about {companyName}&apos;s credit appraisal</p>
             <div className="flex flex-wrap gap-2 justify-center">
               {STARTER_QUESTIONS.map((q, i) => (
                 <button
                   key={i}
                   onClick={() => sendMessage(q)}
-                  className="px-3 py-2 text-sm bg-slate-800/60 border border-slate-600 rounded-lg text-slate-300 hover:text-white hover:border-blue-500 transition-all"
+                  className="px-3 py-2 text-[12px] bg-ic-surface-mid border border-ic-border rounded-[10px] text-ic-text hover:bg-ic-accent-light hover:border-ic-accent/30 transition-colors"
                 >
                   {q}
                 </button>
@@ -110,20 +100,21 @@ export default function ChatInterface({ companyId, companyName }: ChatInterfaceP
             className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
           >
             <div
-              className={`max-w-2xl rounded-2xl px-4 py-3 ${msg.role === 'user'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-slate-700/80 text-slate-200'
-                }`}
+              className={`max-w-2xl px-4 py-3 ${
+                msg.role === 'user'
+                  ? 'bg-ic-accent text-white rounded-[10px] rounded-br-[2px]'
+                  : 'bg-ic-surface-mid text-ic-text rounded-[10px] rounded-bl-[2px]'
+              }`}
             >
-              <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+              <p className="text-[14px] whitespace-pre-wrap leading-relaxed">{msg.content}</p>
               {msg.sources && msg.sources.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1">
                   {msg.sources.map((s, j) => (
                     <span
                       key={j}
-                      className="px-2 py-0.5 text-xs rounded-full bg-blue-900/50 text-blue-300 border border-blue-700/50"
+                      className="px-2 py-0.5 text-[10px] rounded bg-ic-accent-light text-ic-accent border border-ic-accent/20"
                     >
-                      📄 {s}
+                      {s}
                     </span>
                   ))}
                 </div>
@@ -134,16 +125,16 @@ export default function ChatInterface({ companyId, companyName }: ChatInterfaceP
 
         {loading && (
           <div className="flex justify-start">
-            <div className="bg-slate-700/80 rounded-2xl px-4 py-3">
-              <p className="text-slate-400 text-sm animate-pulse">Thinking...</p>
+            <div className="bg-ic-surface-mid rounded-[10px] rounded-bl-[2px] px-4 py-3">
+              <p className="text-ic-muted text-[14px] animate-pulse">Thinking...</p>
             </div>
           </div>
         )}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
-      <div className="border-t border-slate-700 p-4">
+      {/* Input bar */}
+      <div className="border-t border-ic-border bg-ic-surface p-4">
         <div className="flex gap-3">
           <input
             type="text"
@@ -151,14 +142,14 @@ export default function ChatInterface({ companyId, companyName }: ChatInterfaceP
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && sendMessage(input)}
             placeholder="Ask about this credit appraisal..."
-            className="flex-1 px-4 py-3 bg-slate-800/60 border border-slate-600 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="flex-1 px-4 py-3 bg-ic-surface border border-ic-border rounded-[10px] text-ic-text text-[14px] placeholder:text-ic-muted focus:outline-none focus:ring-2 focus:ring-ic-accent/40"
           />
           <button
             onClick={() => sendMessage(input)}
             disabled={!input.trim() || loading}
-            className="px-6 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-600 text-white rounded-xl font-medium transition-all"
+            className="px-5 py-3 bg-ic-accent text-white rounded-[10px] font-medium transition-opacity hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            Send
+            →
           </button>
         </div>
       </div>

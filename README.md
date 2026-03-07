@@ -127,7 +127,7 @@ cp .env.example .env
 ```bash
 docker run -d --name intelli_postgres -e POSTGRES_DB=intellicredit -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=password -p 5432:5432 postgres:16
 docker run -d --name intelli_qdrant -p 6333:6333 qdrant/qdrant:latest
-docker run -d --name intelli_redis -p 6379:6379 redis:7-alpine
+
 ```
 
 ### 3) Backend

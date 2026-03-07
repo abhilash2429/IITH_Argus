@@ -42,7 +42,7 @@ export default function FraudGraph({
       .data(links)
       .enter()
       .append('line')
-      .attr('stroke', '#6f8e5f')
+      .attr('stroke', 'var(--ic-border)')
       .attr('stroke-opacity', 0.7)
       .attr('stroke-width', (d) => Math.max(1, d.value / 20));
 
@@ -53,7 +53,7 @@ export default function FraudGraph({
       .enter()
       .append('circle')
       .attr('r', (d) => (d.type === 'company' ? 13 : 9))
-      .attr('fill', (d) => (d.type === 'company' ? '#4cbb17' : '#7ba95a'))
+      .attr('fill', (d) => (d.type === 'company' ? 'var(--ic-accent)' : 'var(--ic-tan)'))
       .call(
         d3
           .drag<any, any>()
@@ -81,7 +81,8 @@ export default function FraudGraph({
       .append('text')
       .text((d) => d.id)
       .attr('font-size', 11)
-      .attr('fill', '#e8f2df');
+      .attr('font-family', 'DM Sans, sans-serif')
+      .attr('fill', 'var(--ic-text)');
 
     simulation.on('tick', () => {
       link
@@ -100,9 +101,9 @@ export default function FraudGraph({
   }, [links, nodes]);
 
   return (
-    <div className="bg-slate-800/50 rounded-xl border border-slate-700 p-5">
-      <h3 className="text-white font-semibold text-lg mb-3">Fraud Fingerprinting Graph</h3>
-      <svg ref={ref} width={560} height={320} className="w-full h-auto rounded bg-slate-900/50" />
+    <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
+      <p className="text-[10px] font-medium tracking-[0.12em] uppercase text-ic-muted mb-2.5">Fraud Fingerprinting Graph</p>
+      <svg ref={ref} width={560} height={320} className="w-full h-auto rounded-[10px] bg-ic-surface-mid" />
     </div>
   );
 }

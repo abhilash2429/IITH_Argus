@@ -17,10 +17,10 @@ export default function StressTestPanel({
   }, [baseScore, revenueDrop]);
 
   return (
-    <div className="bg-slate-800/50 rounded-xl border border-slate-700 p-5">
-      <h3 className="text-white font-semibold text-lg mb-2">Stress Test</h3>
-      <p className="text-slate-300 text-sm mb-3">
-        What if revenue drops by <span className="font-semibold">{revenueDrop}%</span>?
+    <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
+      <p className="text-[10px] font-medium tracking-[0.12em] uppercase text-ic-muted mb-2.5">Stress Test</p>
+      <p className="text-ic-text text-[14px] mb-3">
+        What if revenue drops by <span className="font-mono font-medium">{revenueDrop}%</span>?
       </p>
       <input
         type="range"
@@ -28,18 +28,17 @@ export default function StressTestPanel({
         max={40}
         value={revenueDrop}
         onChange={(e) => setRevenueDrop(Number(e.target.value))}
-        className="w-full accent-blue-500"
+        className="w-full"
       />
-      <p className="text-slate-200 mt-3">
-        Simulated Credit Score: <span className="font-bold">{simulated.toFixed(0)}</span>
+      <p className="text-ic-text text-[14px] mt-3">
+        Simulated Credit Score: <span className="font-mono font-medium">{simulated.toFixed(0)}</span>
       </p>
       <button
         onClick={() => onSimulate?.(revenueDrop)}
-        className="mt-3 px-3 py-2 rounded bg-blue-600 hover:bg-blue-500 text-white text-sm"
+        className="mt-3 px-4 py-2 rounded-[6px] bg-ic-accent text-white text-[12px] font-medium transition-opacity hover:opacity-90"
       >
         Apply Scenario
       </button>
     </div>
   );
 }
-

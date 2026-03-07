@@ -1,8 +1,3 @@
-/**
- * UploadZone — react-dropzone multi-format upload component.
- * Shows document type badge per file after classification.
- */
-
 'use client';
 
 import { useCallback, useState } from 'react';
@@ -60,20 +55,20 @@ export default function UploadZone({ onFilesReady }: UploadZoneProps) {
     <div>
       <div
         {...getRootProps()}
-        className={`border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-all duration-200 ${isDragActive
-            ? 'border-blue-400 bg-blue-900/20'
-            : 'border-slate-600 hover:border-blue-500 bg-slate-800/30'
-          }`}
+        className={`border-2 border-dashed rounded-[10px] p-10 text-center cursor-pointer transition-all duration-200 ${
+          isDragActive
+            ? 'border-ic-accent bg-ic-accent-light'
+            : 'border-ic-border bg-ic-surface-mid hover:border-ic-accent/50'
+        }`}
       >
         <input {...getInputProps()} />
-        <div className="text-4xl mb-3">📄</div>
-        <p className="text-slate-300 text-lg">
+        <p className="text-ic-text text-[15px]">
           {isDragActive
             ? 'Drop files here...'
-            : 'Drag & drop PDF/DOCX/CSV/XML/Excel/JPEG files, or click to browse'}
+            : 'Drag & drop files, or click to browse'}
         </p>
-        <p className="text-slate-500 text-sm mt-2">
-          Annual reports, scanned pages (JPEG), bank statements, GST filings, audit reports, ITR, GSTR-3B
+        <p className="text-ic-muted text-[12px] mt-2">
+          PDF, DOCX, CSV, XML, Excel, JPEG, PNG
         </p>
       </div>
 
@@ -82,22 +77,22 @@ export default function UploadZone({ onFilesReady }: UploadZoneProps) {
           {uploadedFiles.map((uf, i) => (
             <div
               key={i}
-              className="flex items-center justify-between bg-slate-800/60 rounded-lg px-4 py-3 border border-slate-700"
+              className="flex items-center justify-between bg-ic-surface-mid rounded-[10px] px-4 py-2.5 border border-ic-border"
             >
-              <div className="flex items-center gap-3">
-                <span className="text-blue-400">📎</span>
-                <span className="text-white text-sm truncate max-w-xs">
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-ic-positive flex-shrink-0" />
+                <span className="font-mono text-[12px] text-ic-text truncate">
                   {uf.file.name}
                 </span>
                 {uf.type && (
-                  <span className="px-2 py-0.5 text-xs rounded-full bg-blue-900/50 text-blue-300 border border-blue-700/50">
+                  <span className="px-2 py-0.5 text-[10px] rounded bg-ic-accent-light text-ic-accent border border-ic-accent/20 flex-shrink-0">
                     {uf.type}
                   </span>
                 )}
               </div>
               <button
                 onClick={() => removeFile(i)}
-                className="text-slate-400 hover:text-red-400 text-sm"
+                className="text-ic-muted hover:text-ic-negative text-[12px] ml-2 flex-shrink-0"
               >
                 ✕
               </button>

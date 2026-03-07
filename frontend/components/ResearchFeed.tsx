@@ -26,17 +26,25 @@ export default function ResearchFeed({ findings }: { findings: Finding[] }) {
     return findings;
   }, [filter, findings]);
 
+  const getSeverityStyle = (severity: string) => {
+    if (severity === 'CRITICAL') return 'bg-[#fdf0e8] text-ic-warning border border-[#f3d5bc]';
+    if (severity === 'HIGH') return 'bg-[#fdf0e8] text-ic-warning border border-[#f3d5bc]';
+    return 'bg-ic-surface-mid text-ic-muted border border-ic-border';
+  };
+
   return (
-    <div className="bg-slate-800/50 rounded-xl border border-slate-700 p-5">
+    <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-white font-semibold text-lg">Research Feed</h3>
-        <div className="flex gap-2 flex-wrap">
+        <p className="text-[10px] font-medium tracking-[0.12em] uppercase text-ic-muted">Research Feed</p>
+        <div className="flex gap-1.5 flex-wrap">
           {FILTERS.map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`px-2 py-1 rounded text-xs ${
-                filter === f ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300'
+              className={`px-2 py-1 rounded text-[10px] font-medium transition-colors ${
+                filter === f
+                  ? 'bg-ic-accent text-white'
+                  : 'bg-ic-surface-mid text-ic-muted hover:text-ic-text'
               }`}
             >
               {f}
@@ -45,31 +53,32 @@ export default function ResearchFeed({ findings }: { findings: Finding[] }) {
         </div>
       </div>
 
-      <div className="space-y-3 max-h-[420px] overflow-auto pr-2">
+      <div className="space-y-0 max-h-[420px] overflow-auto">
         {filtered.map((f, idx) => (
-          <div key={`${f.source_url}-${idx}`} className="p-3 rounded-lg bg-slate-900/60 border border-slate-700">
+          <div key={`${f.source_url}-${idx}`} className="py-2.5 border-b border-ic-border last:border-0">
             <div className="flex justify-between items-start gap-2">
-              <p className="text-white font-medium">{f.source_name}</p>
-              <span className="text-xs px-2 py-1 rounded bg-slate-700 text-slate-100">
+              <p className="text-[13px] font-medium text-ic-text">{f.source_name}</p>
+              <span className={`text-[10px] px-2 py-0.5 rounded font-medium ${getSeverityStyle(f.severity)}`}>
                 {f.severity}
               </span>
             </div>
-            <p className="text-slate-300 text-sm mt-1">{f.summary}</p>
-            <p className="text-slate-500 text-xs mt-2">
-              {f.date_of_finding ? new Date(f.date_of_finding).toLocaleDateString() : 'No date'}
-            </p>
-            <a
-              href={f.source_url}
-              target="_blank"
-              rel="noreferrer"
-              className="text-sky-400 text-xs mt-1 inline-block"
-            >
-              Source link
-            </a>
+            <p className="text-ic-muted text-[12px] mt-1">{f.summary}</p>
+            <div className="flex items-center gap-3 mt-1.5">
+              <span className="font-mono text-[11px] text-ic-muted">
+                {f.date_of_finding ? new Date(f.date_of_finding).toLocaleDateString() : 'No date'}
+              </span>
+              <a
+                href={f.source_url}
+                target="_blank"
+                rel="noreferrer"
+                className="text-ic-accent text-[11px] no-underline hover:underline"
+              >
+                Source →
+              </a>
+            </div>
           </div>
         ))}
       </div>
     </div>
   );
 }
-

@@ -11,13 +11,13 @@ import {
   Bar,
   Cell,
 } from 'recharts';
-
 import {
   getExplainV1,
   getResearchV1,
   getResultsV1,
   getReportUrlV1,
 } from '@/lib/api';
+import { useAnalysisStore } from '@/store/analysisStore';
 import FiveCsRadar from '@/components/FiveCsRadar';
 import TimelineView from '@/components/TimelineView';
 import ResearchFeed from '@/components/ResearchFeed';
@@ -34,11 +34,7 @@ export default function ResultsPage() {
   const [research, setResearch] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusMessage, setStatusMessage] = useState('Loading analysis results...');
-  const [companyId, setCompanyId] = useState('');
-
-  useEffect(() => {
-    setCompanyId(localStorage.getItem('companyId') || '');
-  }, []);
+  const { companyId, uploadedFileNames, setResult: storeResult } = useAnalysisStore();
 
   useEffect(() => {
     let cancelled = false;
@@ -60,15 +56,14 @@ export default function ResultsPage() {
             setStatusMessage(latestResult?.error_message || 'Analysis failed.');
             break;
           }
-          if (runStatus !== 'processing' && latestResult?.decision) {
-            break;
-          }
+          if (runStatus !== 'processing' && latestResult?.decision) break;
           setStatusMessage(`Analysis in progress: ${latestResult?.current_step || 'INITIALIZING'}...`);
           await sleep(1200);
         }
 
         if (!cancelled) {
           setResult(latestResult);
+          storeResult(latestResult);
         }
 
         const explainRes = await getExplainV1(companyId).catch(() => null);
@@ -80,21 +75,15 @@ export default function ResultsPage() {
         }
       } catch (err) {
         console.error(err);
-        if (!cancelled) {
-          setStatusMessage('Unable to load analysis yet. Retrying from pipeline is recommended.');
-        }
+        if (!cancelled) setStatusMessage('Unable to load analysis yet. Retrying from pipeline is recommended.');
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
     };
 
     void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [companyId]);
+    return () => { cancelled = true; };
+  }, [companyId, storeResult]);
 
   const decision = result?.decision || {};
   const score = Number(decision.credit_score || 0);
@@ -104,6 +93,7 @@ export default function ResultsPage() {
   const hasBorrowerInput = Object.values(borrowerContext).some(
     (value) => String(value || '').trim().length > 0
   );
+
   const fiveC = useMemo(() => {
     const f = result?.features || {};
     return {
@@ -111,13 +101,7 @@ export default function ResultsPage() {
       capacity: Math.min(10, Math.max(0, Number(f.dscr || 1.2) * 3)),
       capital: Math.min(10, Math.max(0, 8.5 - Number(f.debt_equity_ratio || 1.5))),
       collateral: Math.min(10, Math.max(0, Number(f.collateral_coverage_ratio || 1.1) * 4)),
-      conditions: Math.min(
-        10,
-        Math.max(
-          0,
-          8 - Number(f.has_sector_headwinds || 0) * 2 - Number(f.has_revenue_inflation_signals || 0) * 2
-        )
-      ),
+      conditions: Math.min(10, Math.max(0, 8 - Number(f.has_sector_headwinds || 0) * 2 - Number(f.has_revenue_inflation_signals || 0) * 2)),
     };
   }, [result]);
 
@@ -131,160 +115,153 @@ export default function ResultsPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 p-8 text-slate-200">
-        {statusMessage}
-      </main>
+      <div className="bg-ic-page py-10 px-8 min-h-[calc(100vh-56px)]">
+        <p className="text-ic-muted animate-pulse">{statusMessage}</p>
+      </div>
     );
   }
 
   if (!result || !decision?.credit_score) {
     return (
-      <main className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 p-8 text-slate-200">
-        {statusMessage || 'Results are being prepared. Please keep this page open.'}
-      </main>
+      <div className="bg-ic-page py-10 px-8 min-h-[calc(100vh-56px)]">
+        <p className="text-ic-muted">{statusMessage || 'Results are being prepared. Please keep this page open.'}</p>
+      </div>
     );
   }
 
+  const chartTooltipStyle = {
+    backgroundColor: 'var(--ic-surface)',
+    border: '1px solid var(--ic-border)',
+    color: 'var(--ic-text)',
+    borderRadius: '8px',
+  };
+
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-        <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-5">
-          <h1 className="text-2xl font-bold text-white">Analysis Results</h1>
-          <p className="text-slate-300 mt-2">
-            Credit Score: <span className="text-white font-bold">{score.toFixed(0)}</span> / 900
-            {'  '}| Grade: <span className="font-bold text-cyan-300">{decision.risk_grade}</span>
-            {'  '}| Decision: <span className="font-bold text-emerald-300">{decision.recommendation}</span>
-          </p>
-          <p className="text-slate-300">
-            Recommended amount: ₹{Number(decision.recommended_loan_amount || 0).toFixed(2)} crore
-            {'  '}| Interest: {Number(decision.recommended_interest_rate || 0).toFixed(2)}%
-          </p>
-          <p className="text-slate-300 mt-1">
-            Human input impact:{' '}
-            <span className={`font-semibold ${humanImpactPoints >= 0 ? 'text-emerald-300' : 'text-red-300'}`}>
-              {humanImpactPoints >= 0 ? '+' : ''}
-              {humanImpactPoints.toFixed(1)} score points
-            </span>
-            {'  '}| Borrower input status:{' '}
-            <span className={hasBorrowerInput ? 'text-emerald-300 font-semibold' : 'text-amber-300 font-semibold'}>
-              {hasBorrowerInput ? 'Captured and used' : 'Not provided'}
-            </span>
-          </p>
-          {result?.cam_docx_path ? (
-            <a
-              href={getReportUrlV1(companyId)}
-              className="inline-block mt-3 px-4 py-2 rounded bg-blue-600 hover:bg-blue-500 text-white"
-            >
-              Download CAM (.docx)
-            </a>
-          ) : (
-            <p className="text-slate-300 mt-3">CAM generation in progress...</p>
-          )}
-        </div>
-
-        <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-5">
-          <h2 className="text-white text-lg font-semibold">Human Input Traceability</h2>
-          {hasBorrowerInput ? (
-            <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-              <p className="text-slate-300">
-                Finance officer:{' '}
-                <span className="text-white font-medium">
-                  {String(borrowerContext.finance_officer_name || 'Not provided')}
-                </span>
-              </p>
-              <p className="text-slate-300">
-                Cooperation:{' '}
-                <span className="text-white font-medium">
-                  {String(borrowerContext.management_cooperation || 'Not provided')}
-                </span>
-              </p>
-              <p className="text-slate-300">
-                Capacity utilization:{' '}
-                <span className="text-white font-medium">
-                  {Number(dueDiligence.factory_capacity_utilization || 0).toFixed(0)}%
-                </span>
-              </p>
-              <p className="text-slate-300">
-                Integrity score:{' '}
-                <span className="text-white font-medium">
-                  {Number(dueDiligence.management_integrity_score || 0).toFixed(1)} / 10
-                </span>
-              </p>
-              <p className="text-slate-300 md:col-span-2">
-                Business highlights:{' '}
-                <span className="text-white font-medium">
-                  {String(borrowerContext.business_highlights || 'Not provided')}
-                </span>
-              </p>
-              <p className="text-slate-300 md:col-span-2">
-                Disclosed risks:{' '}
-                <span className="text-white font-medium">
-                  {String(borrowerContext.disclosed_risks || 'Not provided')}
-                </span>
-              </p>
+    <div className="bg-ic-page py-10 px-4 md:px-8">
+      <div className="max-w-[1200px] mx-auto">
+        {/* CSS Grid layout */}
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+          {/* Score summary — spans 2 cols */}
+          <div className="xl:col-span-2 bg-ic-surface border border-ic-border rounded-[10px] p-5">
+            <p className="text-[10px] font-medium tracking-[0.12em] uppercase text-ic-muted mb-2.5">Analysis Results</p>
+            <div className="flex flex-wrap gap-4 items-baseline">
+              <span className="font-display text-[32px] text-ic-text">{score.toFixed(0)}</span>
+              <span className="text-ic-muted text-[14px]">/ 900</span>
+              <span className="font-mono text-[13px] bg-ic-accent-light text-ic-accent px-2 py-0.5 rounded">{decision.risk_grade}</span>
+              <span className="font-mono text-[13px] bg-ic-accent-light text-ic-positive px-2 py-0.5 rounded">{decision.recommendation}</span>
             </div>
-          ) : (
-            <p className="text-slate-300 mt-2">
-              No borrower/finance-officer inputs were captured, so score impact from human input is currently
-              {` ${humanImpactPoints.toFixed(1)} `} points.
+            <p className="text-ic-muted text-[13px] mt-2">
+              Recommended: <span className="font-mono text-ic-text">₹{Number(decision.recommended_loan_amount || 0).toFixed(2)} Cr</span>
+              {' · '}Interest: <span className="font-mono text-ic-text">{Number(decision.recommended_interest_rate || 0).toFixed(2)}%</span>
             </p>
-          )}
-        </div>
+            <div className="flex flex-wrap gap-4 mt-2 text-[12px]">
+              <span className="text-ic-muted">
+                Human input: <span className={`font-mono font-medium ${humanImpactPoints >= 0 ? 'text-ic-positive' : 'text-ic-negative'}`}>
+                  {humanImpactPoints >= 0 ? '+' : ''}{humanImpactPoints.toFixed(1)} pts
+                </span>
+              </span>
+              <span className="text-ic-muted">
+                Borrower input: <span className={`font-medium ${hasBorrowerInput ? 'text-ic-positive' : 'text-ic-warning'}`}>
+                  {hasBorrowerInput ? 'Captured' : 'Not provided'}
+                </span>
+              </span>
+            </div>
+            {result?.cam_docx_path && (
+              <a
+                href={getReportUrlV1(companyId)}
+                className="inline-block mt-3 px-4 py-2 rounded-[6px] bg-ic-accent text-white text-[12px] font-medium no-underline hover:opacity-90"
+              >
+                Download CAM (.docx)
+              </a>
+            )}
+          </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          <FiveCsRadar company={fiveC} />
-          <div className="bg-slate-800/50 rounded-xl border border-slate-700 p-5">
-            <h3 className="text-white font-semibold text-lg mb-3">GST vs Bank Reconciliation</h3>
-            <ResponsiveContainer width="100%" height={320}>
-              <BarChart data={gstBankData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#5f7752" />
-                <XAxis dataKey="month" tick={{ fill: '#dce8d5' }} />
-                <YAxis tick={{ fill: '#dce8d5' }} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#253021',
-                    border: '1px solid #6a8b58',
-                    color: '#eef6e9',
-                  }}
-                />
-                <Bar dataKey="gst" name="GST Reported Revenue" fill="#8fbf5e">
-                  {gstBankData.map((item, idx) => (
-                    <Cell
-                      key={idx}
-                      fill={item.gst - item.bank > 5 ? '#dc2626' : '#8fbf5e'}
-                    />
+          {/* Anomaly flags */}
+          <div className="xl:col-span-1">
+            <AnomalyFlags anomalies={result?.cross_validation?.anomalies || []} />
+          </div>
+
+          {/* Five Cs Radar + GST chart — spans 2 cols */}
+          <div className="xl:col-span-2 space-y-5">
+            <FiveCsRadar company={fiveC} />
+
+            <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
+              <p className="text-[10px] font-medium tracking-[0.12em] uppercase text-ic-muted mb-2.5">GST vs Bank Reconciliation</p>
+              <ResponsiveContainer width="100%" height={320}>
+                <BarChart data={gstBankData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--ic-border)" />
+                  <XAxis dataKey="month" tick={{ fill: 'var(--ic-muted)', fontSize: 12, fontFamily: 'DM Mono' }} />
+                  <YAxis tick={{ fill: 'var(--ic-muted)', fontSize: 12, fontFamily: 'DM Mono' }} />
+                  <Tooltip contentStyle={chartTooltipStyle} />
+                  <Bar dataKey="gst" name="GST Reported Revenue" fill="var(--ic-accent)">
+                    {gstBankData.map((item, idx) => (
+                      <Cell key={idx} fill={item.gst - item.bank > 5 ? 'var(--ic-negative)' : 'var(--ic-accent)'} />
+                    ))}
+                  </Bar>
+                  <Bar dataKey="bank" name="Bank Credits Received" fill="var(--ic-tan)" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* SHAP + Timeline */}
+            <ShapChart
+              data={Object.entries(explain?.shap_waterfall_data || {}).map(([feature, value]) => ({
+                feature,
+                value: Number(value),
+                direction: Number(value) > 0 ? 'positive' : 'negative',
+              }))}
+            />
+
+            <StressTestPanel baseScore={score} />
+          </div>
+
+          {/* Right sidebar — sticky */}
+          <div className="xl:col-span-1 space-y-5 xl:sticky xl:top-[72px] xl:self-start">
+            {/* Human input traceability */}
+            <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
+              <p className="text-[10px] font-medium tracking-[0.12em] uppercase text-ic-muted mb-2.5">Human Input Traceability</p>
+              {hasBorrowerInput ? (
+                <div className="space-y-2 text-[12px]">
+                  <p className="text-ic-muted">Finance officer: <span className="text-ic-text font-medium">{String(borrowerContext.finance_officer_name || 'N/A')}</span></p>
+                  <p className="text-ic-muted">Cooperation: <span className="text-ic-text font-medium">{String(borrowerContext.management_cooperation || 'N/A')}</span></p>
+                  <p className="text-ic-muted">Capacity: <span className="font-mono text-ic-text">{Number(dueDiligence.factory_capacity_utilization || 0).toFixed(0)}%</span></p>
+                  <p className="text-ic-muted">Integrity: <span className="font-mono text-ic-text">{Number(dueDiligence.management_integrity_score || 0).toFixed(1)}/10</span></p>
+                </div>
+              ) : (
+                <p className="text-ic-muted text-[12px]">No borrower inputs captured.</p>
+              )}
+            </div>
+
+            {/* Documents card */}
+            {uploadedFileNames.length > 0 && (
+              <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
+                <p className="text-[10px] font-medium tracking-[0.12em] uppercase text-ic-muted mb-2.5">Documents</p>
+                <div className="space-y-1.5">
+                  {uploadedFileNames.map((name, i) => (
+                    <div key={i} className="flex items-center gap-2 text-[12px]">
+                      <span className="w-1.5 h-1.5 rounded-full bg-ic-positive flex-shrink-0" />
+                      <span className="font-mono text-ic-text truncate">{name}</span>
+                    </div>
                   ))}
-                </Bar>
-                <Bar dataKey="bank" name="Bank Credits Received" fill="#4cbb17" />
-              </BarChart>
-            </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+
+            <TimelineView
+              items={(result?.audit_events || []).map((a: any) => ({
+                timestamp: a.timestamp,
+                title: a.message,
+                severity: a.severity || 'INFORMATIONAL',
+                details: a.step,
+              }))}
+            />
+
+            <ResearchFeed findings={research} />
           </div>
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          <ShapChart
-            data={Object.entries(explain?.shap_waterfall_data || {}).map(([feature, value]) => ({
-              feature,
-              value: Number(value),
-              direction: Number(value) > 0 ? 'positive' : 'negative',
-            }))}
-          />
-          <TimelineView
-            items={(result?.audit_events || []).map((a: any) => ({
-              timestamp: a.timestamp,
-              title: a.message,
-              severity: a.severity || 'INFORMATIONAL',
-              details: a.step,
-            }))}
-          />
-        </div>
-
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          <ResearchFeed findings={research} />
-          <AnomalyFlags anomalies={result?.cross_validation?.anomalies || []} />
-        </div>
-
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        {/* Full width: Fraud Graph */}
+        <div className="mt-5">
           <FraudGraph
             nodes={[
               { id: 'Vardhman', type: 'company' },
@@ -297,9 +274,8 @@ export default function ResultsPage() {
               { source: 'Entity C', target: 'Vardhman', value: 39 },
             ]}
           />
-          <StressTestPanel baseScore={score} />
         </div>
       </div>
-    </main>
+    </div>
   );
 }

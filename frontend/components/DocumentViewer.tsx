@@ -10,9 +10,9 @@ export default function DocumentViewer({ url }: { url: string }) {
   const [page, setPage] = useState(1);
 
   return (
-    <div className="bg-slate-800/50 rounded-xl border border-slate-700 p-5">
-      <h3 className="text-white font-semibold text-lg mb-3">Document Viewer</h3>
-      <div className="overflow-auto rounded bg-slate-900 p-3">
+    <div className="bg-ic-surface border border-ic-border rounded-[10px] p-5">
+      <p className="text-[10px] font-medium tracking-[0.12em] uppercase text-ic-muted mb-2.5">Document Viewer</p>
+      <div className="overflow-auto rounded-[10px] bg-ic-surface-mid p-3">
         <Document file={url} onLoadSuccess={(d) => setPages(d.numPages)}>
           <Page pageNumber={page} width={620} />
         </Document>
@@ -21,17 +21,17 @@ export default function DocumentViewer({ url }: { url: string }) {
         <button
           disabled={page <= 1}
           onClick={() => setPage((p) => p - 1)}
-          className="px-3 py-1 rounded bg-slate-700 text-white disabled:opacity-40"
+          className="px-3 py-1 rounded-[6px] bg-ic-surface-mid border border-ic-border text-ic-text text-[12px] disabled:opacity-40"
         >
           Prev
         </button>
-        <span className="text-slate-300 text-sm">
-          Page {page} / {pages}
+        <span className="text-ic-muted text-[12px] font-mono">
+          {page} / {pages}
         </span>
         <button
           disabled={page >= pages}
           onClick={() => setPage((p) => p + 1)}
-          className="px-3 py-1 rounded bg-slate-700 text-white disabled:opacity-40"
+          className="px-3 py-1 rounded-[6px] bg-ic-surface-mid border border-ic-border text-ic-text text-[12px] disabled:opacity-40"
         >
           Next
         </button>
@@ -39,4 +39,3 @@ export default function DocumentViewer({ url }: { url: string }) {
     </div>
   );
 }
-
